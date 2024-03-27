@@ -23,7 +23,7 @@ app.use(express.json({limit: "16kb"}))
 
 app.use(express.urlencoded({extended: true, limit: "16kb"}))
 
-/* We might some data like pdf files or images we need to store it express this express.static is used to store the files. we can make it a public folder which is present in the file structure where everyone can access */
+/* We might receive some data like pdf files or images we need to store it express this express.static is used to store the files. we can make it a public folder which is present in the file structure where everyone can access */
 
 app.use(express.static("public"))
 
