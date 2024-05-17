@@ -10,7 +10,7 @@ const userSchema = new Schema(
             unique: true,
             lowercase: true,
             trim: true,
-            // index: true  //if you want to use the database to search something useing username make the index: true, BUT BE CAUTIOUS IT WILL TAKE A LOT OF MONEY AND DATABASE SPACE.
+            // index: true  //if you want to use the database to search something using username make the index: true, BUT BE CAUTIOUS IT WILL TAKE A LOT OF MONEY AND DATABASE SPACE.
         },
         email: {
             type: String,
@@ -74,7 +74,7 @@ userSchema.pre("save", async function (next) {
 })
 
 /* 
-    Now in mongoose we have some methods to check the given password is correct is not using the bcrypt package. Here we created a new method called isPasswordCorrect this is an async function it will take it time, and we are sending the password as an argument to check the password given by the used is correct or not.so we need to await until it returns the boolean true or false.
+    Now in mongoose we have some methods to check the given password is correct or not using the bcrypt package. Here we created a new method called isPasswordCorrect this is an async function it will take it time, and we are sending the password as an argument to check the password given by the used is correct or not.so we need to await until it returns the boolean true or false.
 
     bcrypt has a function called compare where it takes two arguments one the password entered by the user and this.password(encrypted password which is stored in the database), it will take the two passwords and the it will return it boolean value.
 */

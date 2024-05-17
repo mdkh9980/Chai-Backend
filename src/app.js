@@ -11,7 +11,7 @@ app.use(cors()) this means you are creating a middleware, it has some of the opt
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN,
-    Credential: true
+    credentials: true
 }))
 
 /* we get the input in various form it might be in json, in express we use this 
@@ -19,7 +19,7 @@ express.json() and these has some option like limit(to limit the amount of data 
 
 app.use(express.json({limit: "16kb"}))
 
-/* We might the get the data or input from url also, in express we use the express.urlencoded() if you write this much is enough but in some of the code bases it, they will some options like extended where it we extend the into nested things too. Limit option is also available to limit the amount of data we get */
+/* We might get the data or input from url also, in express we use the express.urlencoded() if you write this much is enough but in some of the code bases it, they will some options like extended where it we extend the into nested things too. Limit option is also available to limit the amount of data we get */
 
 app.use(express.urlencoded({extended: true, limit: "16kb"}))
 
