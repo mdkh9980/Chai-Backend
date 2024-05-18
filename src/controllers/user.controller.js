@@ -3,6 +3,35 @@ import { ApiError } from "../utils/apiError.js";
 import { User } from "../models/user.models.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
+
+/* 
+    generating access token and refresh token is just async method because this is not a web request this is a internal matter where we want create tokens for login. 
+    To create this we need userId, we can get the user id, because in login method we have instance of User model called user, from that user we can pass userId.
+    Wrap it in try catch block we might get something wrong while generating tokens.
+    - we need to find the user by id and hold that instance in a variable, and same way generate both access and refresh token and hold it in a variable,earlier we have inserted the methods in userSchema in model directory, from those methods we will generate both access token and refresh token.
+    - now add the refreshToken to database which you have created. now comes the question how to add a field in the database, take the instance you created user.refreshToken can access it with dot operator which name you have given in database, user.refreshToken = refreshToken, give the variable which you hold the refreshToken.
+    - Now you have updated the refresh Token but you have to save also, for that we have a method called save(). in this we have object parameter.
+    - Now there is a challenge when you save anything in database you need password or else it would not work for that reason in the save method we need to pass an argument in object called validateBeforeSave: false now we can save with the password also, if you are saving password then this is not required in save() method.
+    - now return the tokens in object format.
+
+*/
+
+const generateAccessAndRefreshToken = async (userId) => {
+    try {
+        const user = await User.findById(userId);
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false })
+
+        return {accessToken, refreshToken}
+    } 
+    catch (error) {
+        throw new ApiError(500, "Something went wrong while generating tokens");
+    }
+}
 
 const registerUser = asyncHandler( async (req, res) => {
     // get user details from front-end
@@ -119,5 +148,186 @@ const registerUser = asyncHandler( async (req, res) => {
 
 } )
 
+/* 
+    Access Token and Refresh Token : Why two are required?
+    Access token is absolutely necessary for logging in, extra is refresh token only why this required means when a user is logged in we will generate both access token and refresh token both at time in a same way but the difference is expiration access token is short lived compared to refresh token, refresh token is stored in database, we don't need to login again if we have the refresh token, server and user will communicate through refresh tokens, no need to login again with password and all.
 
-export { registerUser }
+*/
+
+const loginUser = asyncHandler( async (req, res) => {
+    // my algorithm
+    // take input from user, username, fullname, email, password.
+    // check for refresh token if it is empty then go ahead and create new.
+    // generate an access token and refresh token at a time for according to that
+    // login the user with the email and password.
+    // now store the refresh token in database.
+
+    // video algorithm
+    // req.body -> data
+    // username or email
+    // find the user.
+    // password check
+    // access token and refresh token
+    // send secure cookie.
+
+
+    // we can get data by destructring the object for email or for username from req.body
+    const {email, username} = req.body;
+
+    // checking whether user has sent username or email or not, we can do only username or only email
+    if(!email || !username){
+        throw new ApiError(400, "Username or email is required!");
+    }
+
+    // if both email or username is not empty then check whether this user is existed or not. for this we need to use the User model which is communicating with the database with the method User.findOne({}), you can pass any query to find in the database either existed or not.
+
+    const user = await User.findOne({
+        $or: [{username}, {email}]
+    })
+
+
+    // check user exist or not, if not then throw new apierror.
+    if(!user){
+        throw new ApiError(404, "User not found");
+    }
+
+    // if user exists we need to check for the entered password is correct or not. for that we have already created a method in userModel, and now we are going to use it. One more thing to remember very important. When you are comparing the password which is entered by the user while logging in, the method you created to check whether this password is correct or not, it is stored in the instance of user not in User. This Capital User is that model or document of the mongoose in this model all the mongoose methods will be present but not your methods which you created to compare the password. user which is instance of the User model, in this your methods are available so please keep in mind.
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+
+    if(!isPasswordValid){
+        throw new ApiError(401, "Invalid user Credentials");
+    }
+
+    // Now generating access token and refresh token.This method we are going to create it many times for that reason we need to create a separate method for it, and call whenever user wants to sign in.
+
+    //now we have generated the roken with the method we have created above, don't forget to add await here because in generating tokens method you called the database and it will take time to generate for that reason you need to await this method and pass user id as argument from the instance which you accessed through User Model. With the help of destructuring we will hold both access token and refresh token.
+
+    const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user._id);
+
+    // Now we did save it in the database but we do not have access to the token in user instance in this method. for that reason we need to create a loggedinUser which will hold all the things except password and refresh tokens.
+
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+
+    // now we need to send the cookie to user, for sending cookie we need to design some option before sending. it has some option like httpOnly and secure we need to make these two true, basically cookies can be modified in the frontend when you keept these two options for true this is not modifiable from the frontend this is only modifiable from server but we can see the cookies. 
+
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    // now send the response that everything went successfully and user can login. we sent the status code and sent accessToken and refreshToken in cookies but why do we need to send tokens again in json data, because if the user wants to save the tokens locally or user will be building the mobile applications in mobile applications the we do not have tokens access, it might be for that reason so it is a good practice to send these tokens also to user.
+
+    return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(
+            200, 
+            {user: loggedInUser, accessToken, refreshToken},
+            "Logged In successfully"
+        )
+    )
+} )
+
+// Now similarly we need to write functinality logout. now we need to have the access of User but we do not have the access in the logout we cannot ask the user to give the email and password to logout, if we ask then he can logout whoever he wants. so for that reason we need not to ask for email and password to logging out. Now the challenge is to get the access of user. 
+
+// we have inject the cookie-parser in this project so it is a two way communication, cookie will be present in response and request also, and remember we sent the token in json data also, how to log out, we will logout using cookies, cookies are availble in request also and response also. for this we need to design a middleware it will be called whenever user wants to logout. 
+
+const logoutUser = asyncHandler ( async ( req, res ) => {
+
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set: {refreshToken: undefined}
+        },
+        {
+            new: true
+        }
+    )
+
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(
+        new ApiResponse(200, {}, "User logged out successfully")
+    )
+
+} )
+
+
+/*
+    Now why this below function called refreshAccesToken is required
+    - This is to refresh the access token, when the access token is expired, we know that refresh token is present in database, and we sent it on cookies, now we need to refresh it.
+    - 
+*/
+
+const refreshAccessToken = asyncHandler ( async (req, res) => {
+
+    // refresh token can be accessed from cookies and body if he is using mobile.
+    // why this variable means called incomingRefreshToken because we have refreshToken in database also and this is sent by user.
+
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+    // what if we do not get refresh tokens so check whether we got the token or not.
+
+    if(incomingRefreshToken){
+        throw new ApiError(401, "Unauthorized request");
+    }
+
+    try {
+        // Now we have the refresh token, now we have to verify is this a real token or a fake token from someone else
+        // We need to decode this token also to verify and decoding can done at same time so now we need use jwt.verify method it requires two things one which token to verify and from what code we need to verify, like comparision, compare the incoming token with the available token.
+    
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+    
+        // This findById method will check whether token is sent by the user exits in the database or not. if it exits continue if it does not exists you can say Invalid Access.
+    
+        const user = await User.findById(decodedToken?._id);
+    
+        // check where used exits in the database or not.
+        if(!user){
+            throw new ApiError(401, "Invalid Refresh token");
+        }
+    
+        // now we have two decoded tokens one in incomingRefreshToken and other in user which is from the database, now we need to compare these two token are same or not, if not sent the api error.
+    
+        if(incomingRefreshToken !== user){
+            throw new ApiError(401, "Refresh token is expired or used");
+        }
+    
+        // Now verification and checking has been completed and now we can generate the access token and send a new token in response, for generating new access token we have already declared a method which generates tokens, and we need to send the options to keep it secure.
+    
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+    
+        const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id);
+    
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+            new ApiResponse(200, { accessToken, refreshToken : newRefreshToken }, "Token refreshed successfully")
+        )
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid Refresh Token");
+    }
+
+} )
+
+export { 
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken
+}
