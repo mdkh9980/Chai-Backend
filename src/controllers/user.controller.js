@@ -325,9 +325,159 @@ const refreshAccessToken = asyncHandler ( async (req, res) => {
 
 } )
 
+
+const changeCurrentPassword = asyncHandler ( async (req, res) => {
+    // In this method we are writing changing the password of a logged in user, This method is useful only if he is logged in, in this we will take old password and new password, of course we can take confirm password also this need to be an extra check and it can easily handled in the front end. just take two parameters, oldPassword and newPassword.
+
+    const {oldPassword, newPassword} = req.body;
+
+    // Now we need to extract user id from req.body and send in database to find whether this user is existed or not, logged in or not.
+    const user = await User.findById(req.user?._id);
+
+    // here we are checking that user's old password is correct or not, by using the method which we have declared in user model.
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400, "Invalid old password");
+    }
+
+    // we have reached a stage where we can take the new password and hash it. for this changing password logic and hashing it is written in user model itself.
+
+    user.password = newPassword;
+
+    await user.save({validateBeforeSave: false})
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Password Changed successfully")
+    )
+
+} )
+
+const getCurrentUser = asyncHandler ( async (req, res) => {
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, req.user, "Current user fetched successfully")
+    )
+} )
+
+// now you can write whatever controllers you need but see in this user.controller file you need to decide what changes you are giving user to change like passwords or name, email, username, like this you can write whatever controller you need.
+
+// Advice: When you want update the files please write that controller and endpoint separately because if you write in the same file then the whole text or content in this filed will get resaved again if it loses then you need to take the text fields again from the user, so keep it separatly if you have any image or files to update.
+
+const updateAccountDetails = asyncHandler ( async (req, res) => {
+
+    // here you can give options to your user what all he needs, to changer for this example we are giving options to change only fullName and email
+    const {fullName, email} = req.body;
+
+    if(!fullName || !email){
+        throw new ApiError(400, "We are giving only two options to change either fullName and email both cannot be empty");
+    }
+    // now we need to get the user to update the details provided by the user for the we need to find the user by if. 
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id, // passing user id to change the content which is sent by user.
+        {
+            $set: {
+                fullName,
+                email
+            } // these are mongoose operator these will perform crud operations learn about it.
+        },
+        {new: true} // this object will return the user after saving what all it is saved newly.
+    ).select("-password") // here we have added this select method to remove the password from the user this is where you can reduce calling for database should be concerned.
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Details updated successfully")
+    )
+
+
+} )
+
+// now we write a controller to updating files like images and pdfs and so on. for this we need to pass two middlewares because first we need to check whether user is logged in or not, and other middleware to upload the file that is multer middleware.
+
+const updateUserAvatar = asyncHandler ( async (req, res) => {
+
+    // Here we are using only req.file not req.files because here we are uploading only one file.
+
+    const avatarLocalPath = req.file?.path;
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, "Field should not be empty");
+    }
+    // if we got the path of avatar file then we will upload on cloudinary.
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    if(!avatar.url){
+        throw new ApiError(400, "Error while uploading on avatar file on cloudinary");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {avatar: avatar.url} // remember you made a mistake by writing only avatar.
+        },
+        {new : true}
+    ).select("-password")
+
+    if(!user){
+        throw new ApiError(401, "Error while updating or finding the user");
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "Avatar Updated Successfully")
+    )
+
+} )
+
+const updateUserCoverImage = asyncHandler ( async (req, res) => {
+
+    // Here we are using only req.file not req.files because here we are uploading only one file.
+
+    const coverImageLocalPath = req.file?.path;
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, "Field should not be empty");
+    }
+    // if we got the path of avatar file then we will upload on cloudinary.
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if(!coverImage.url){
+        throw new ApiError(400, "Error while uploading on avatar file on cloudinary");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {coverImage: coverImage.url} // remember you made a mistake by writing only avatar.
+        },
+        {new : true}
+    ).select("-password")
+
+    if(!user){
+        throw new ApiError(401, "Error while updating or finding the user");
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "Cover Image Updated Successfully")
+    )
+
+} )
+
 export { 
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage
 }
