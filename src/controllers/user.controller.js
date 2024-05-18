@@ -278,7 +278,7 @@ const refreshAccessToken = asyncHandler ( async (req, res) => {
 
     // what if we do not get refresh tokens so check whether we got the token or not.
 
-    if(incomingRefreshToken){
+    if(!incomingRefreshToken){
         throw new ApiError(401, "Unauthorized request");
     }
 
