@@ -1,5 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/apiError.js";
+import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -209,7 +209,7 @@ const loginUser = asyncHandler( async (req, res) => {
 
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-    // now we need to send the cookie to user, for sending cookie we need to design some option before sending. it has some option like httpOnly and secure we need to make these two true, basically cookies can be modified in the frontend when you keept these two options for true this is not modifiable from the frontend this is only modifiable from server but we can see the cookies. 
+    // now we need to send the cookie to user, for sending cookie we need to design some option before sending. it has some option like httpOnly and secure we need to make these two true, basically cookies can be modified in the frontend when you kept these two options for true this is not modifiable from the frontend this is only modifiable from server but we can see the cookies. 
 
     const options = {
         httpOnly: true,
@@ -231,9 +231,11 @@ const loginUser = asyncHandler( async (req, res) => {
     )
 } )
 
-// Now similarly we need to write functinality logout. now we need to have the access of User but we do not have the access in the logout we cannot ask the user to give the email and password to logout, if we ask then he can logout whoever he wants. so for that reason we need not to ask for email and password to logging out. Now the challenge is to get the access of user. 
+/* 
+    Now similarly we need to write functinality logout. now we need to have the access of User but we do not have the access in the logout we cannot ask the user to give the email and password to logout, if we ask then he can logout whoever he wants. so for that reason we need not to ask for email and password to logging out. Now the challenge is to get the access of user. 
 
-// we have inject the cookie-parser in this project so it is a two way communication, cookie will be present in response and request also, and remember we sent the token in json data also, how to log out, we will logout using cookies, cookies are availble in request also and response also. for this we need to design a middleware it will be called whenever user wants to logout. 
+    we have inject the cookie-parser in this project so it is a two way communication, cookie will be present in response and request also, and remember we sent the token in json data also, how to log out, we will logout using cookies, cookies are availble in request also and response also. for this we need to design a middleware it will be called whenever user wants to logout. 
+*/
 
 const logoutUser = asyncHandler ( async ( req, res ) => {
 
@@ -362,9 +364,11 @@ const getCurrentUser = asyncHandler ( async (req, res) => {
     )
 } )
 
-// now you can write whatever controllers you need but see in this user.controller file you need to decide what changes you are giving user to change like passwords or name, email, username, like this you can write whatever controller you need.
+/*
+    now you can write whatever controllers you need but see in this user.controller file you need to decide what changes you are giving user to change like passwords or name, email, username, like this you can write whatever controller you need.
 
-// Advice: When you want update the files please write that controller and endpoint separately because if you write in the same file then the whole text or content in this filed will get resaved again if it loses then you need to take the text fields again from the user, so keep it separatly if you have any image or files to update.
+    Advice: When you want update the files please write that controller and endpoint separately because if you write in the same file then the whole text or content in this filed will get resaved again if it loses then you need to take the text fields again from the user, so keep it separatly if you have any image or files to update.
+*/
 
 const updateAccountDetails = asyncHandler ( async (req, res) => {
 
@@ -394,7 +398,9 @@ const updateAccountDetails = asyncHandler ( async (req, res) => {
 
 } )
 
-// now we write a controller to updating files like images and pdfs and so on. for this we need to pass two middlewares because first we need to check whether user is logged in or not, and other middleware to upload the file that is multer middleware.
+/*
+    now we write a controller to updating files like images and pdfs and so on. for this we need to pass two middlewares because first we need to check whether user is logged in or not, and other middleware to upload the file that is multer middleware.
+*/
 
 const updateUserAvatar = asyncHandler ( async (req, res) => {
 
@@ -406,6 +412,8 @@ const updateUserAvatar = asyncHandler ( async (req, res) => {
         throw new ApiError(400, "Field should not be empty");
     }
     // if we got the path of avatar file then we will upload on cloudinary.
+
+    // TODO: write a util to delete the previous image url from cloudinary and database.
 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
 
@@ -470,6 +478,139 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
 
 } )
 
+const getUserChannelProfile = asyncHandler( async (req, res) => {
+    
+    const {username} = req.params
+
+    if(!username?.trim()){
+        throw new ApiError(400, "Username is required");
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            $addFields: {
+                subscriberCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribersTo : {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed : {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscriberCount: 1,
+                channelsSubscribersTo : 1,
+                isSubscribed: 1
+            }
+        }
+    ])
+
+    /*
+        Console log the channel value and see what data type you will get as an output because it is very important and further how to manipulate the data
+    */
+
+    if(!channel?.length){
+        throw new ApiError(404, "Channel Do Not Exists");
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, channel[0], "User channel fetched Successfully")
+    )
+
+} )
+
+const getWatchHistory = asyncHandler( async (req, res) => {
+
+    /*
+        req.user._id will give the string not the objectId, we are using mongoose, mongoose will convert that string to object Id internally.
+        But in aggregation pipelines this code will directly go to mongo db without interfearance of mongoose, so when you are searching with an Id you need to send
+        _id: new mongoose.Types.ObjectId(req.user?._id); this will convert that string to Object Id.
+    */
+
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user?._id)
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from : "videos",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        username: 1,
+                                        fullName: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first : "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user[0].watchHistory, "User Watch History Fetched")
+    )
+} )
+
 export { 
     registerUser,
     loginUser,
@@ -479,5 +620,7 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile,
+    getWatchHistory
 }
