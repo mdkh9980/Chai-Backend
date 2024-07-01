@@ -1,6 +1,6 @@
 import mongoose, {isValidObjectId} from "mongoose"
-import {Video} from "../models/video.model.js"
-import {User} from "../models/user.model.js"
+import {Video} from "../models/video.models.js"
+import {User} from "../models/user.models.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
@@ -8,16 +8,58 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
-    //TODO: get all videos based on query, sort, pagination
-})
+    const { page = 1, limit = 10, query, sortBy = 'createdAt', sortType = 'desc', userId } = req.query;
+    
+    // Set up pagination variables
+    const pageNumber = parseInt(page);
+    const pageSize = parseInt(limit);
+    const skip = (pageNumber - 1) * pageSize;
+
+    // Create filter object
+    let filter = {};
+    if (query) {
+        filter.title = { $regex: query, $options: 'i' }; // Example: filtering by title with a case-insensitive regex search
+    }
+    if (userId) {
+        filter.userId = userId; // Example: filtering by userId
+    }
+
+    // Create sort object
+    let sort = {};
+    if (sortBy) {
+        sort[sortBy] = sortType === 'desc' ? -1 : 1;
+    }
+
+    try {
+        // Fetch videos from the database based on the filter, pagination, and sort criteria
+        const videos = await Video.find(filter)
+            .sort(sort)
+            .skip(skip)
+            .limit(pageSize);
+
+        // Get the total count of videos that match the filter criteria
+        const totalVideos = await Video.countDocuments(filter);
+
+        // Calculate the total number of pages
+        const totalPages = Math.ceil(totalVideos / pageSize);
+
+        // Send response with videos, total pages, and current page number
+        res.status(200).json({
+            videos,
+            totalPages,
+            currentPage: pageNumber
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
 
 const publishAVideo = asyncHandler(async (req, res) => {
     const { title, description} = req.body
     // TODO: get video, upload to cloudinary, create video
     // get video file local path link from the user
-    const videoLocalFilePath = req.file?.videoFile[0]?.path;
-    const thumbnailLocalFilePath = req.file?.thumbnail[0]?.path;
+    const videoLocalFilePath = req.files?.videoFile[0]?.path;
+    const thumbnailLocalFilePath = req.files?.thumbnail[0]?.path;
     // throw error if video file is not available
     if(!videoLocalFilePath){
         throw new ApiError(401, "Video Field is required");

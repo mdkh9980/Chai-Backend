@@ -1,5 +1,5 @@
 import { ApiError } from "../utils/ApiError.js";
-import { asyncHandler } from "../utils/asyncHandler";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.models.js";
 
@@ -11,6 +11,7 @@ import { User } from "../models/user.models.js";
     from this middleware we have access to cookies in request and we sent the data in json also, so it tokens mighe be present in header of request which is sent by user, req.header(). header is a method it will take the argument "Authorization"
 */
 
+/* 
 
 export const verifyJWT = asyncHandler( async (req, _, next) => {
     try {
@@ -34,3 +35,38 @@ export const verifyJWT = asyncHandler( async (req, _, next) => {
         throw new ApiError(401, error?.message || "Invalid Token")
     }
 } )
+*/
+
+const verifyJWT = asyncHandler(async (req, _, next) => {
+    try {
+        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        
+
+        if (!token) {
+            throw new ApiError(401, "Unauthorized access");
+        }
+
+        if (token.split('.').length !== 3) {
+            throw new ApiError(401, "Invalid Token Format");
+        }
+
+        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+
+        const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
+
+        if (!user) {
+            throw new ApiError(401, "Invalid Access Token");
+        }
+
+        req.user = user;
+        next();
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) {
+            throw new ApiError(401, "JWT Error: " + error.message);
+        } else {
+            throw new ApiError(401, error?.message || "Invalid Token");
+        }
+    }
+});
+
+export { verifyJWT }

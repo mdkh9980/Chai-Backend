@@ -23,7 +23,7 @@ app.use(cors({
     express.json() and these has some option like limit(to limit the amount of data to send) like it might be in kb(kilo-byte)  
 */
 
-app.use(express.json({limit: "16kb"}))
+app.use(express.json());
 
 /* 
     We might get the data or input from url also, in express we use the express.urlencoded() if you write this much is enough but in some of the code bases it, they will some options like extended where it we extend the into nested things too. Limit option is also available to limit the amount of data we get 
@@ -46,8 +46,6 @@ app.use(cookieParser())
 
 // routes import
 import userRouter from "../src/routes/user.routes.js";
-import commentRouter from "../src/routes/comment.routes.js";
-import dashboardRouter from "../src/routes/dashboard.routes.js";
 import healthcheckRouter from "../src/routes/healthcheck.routes.js";
 import likeRouter from "../src/routes/like.routes.js";
 import playlistRouter from "../src/routes/playlist.routes.js";
@@ -57,8 +55,6 @@ import videoRouter from "../src/routes/video.routes.js";
 
 // routes declaration
 app.use("/api/v1/users", userRouter)
-app.use("/api/v1/comments", commentRouter)
-app.use("/api/v1/dashboard", dashboardRouter)
 app.use("/api/v1/healthcheck", healthcheckRouter)
 app.use("/api/v1/like", likeRouter)
 app.use("/api/v1/playlist", playlistRouter)

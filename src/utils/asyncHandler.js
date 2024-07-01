@@ -10,7 +10,7 @@ const asyncHandler = (requestHandler) => {
     }
 }
 
-export {asyncHandler}
+export { asyncHandler }
 
 
 /* Async Handler is a higher order function where it can take functions as parameter, it will accessed again. */

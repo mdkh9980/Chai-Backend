@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 /* 
     generating access token and refresh token is just async method because this is not a web request this is a internal matter where we want create tokens for login. 
@@ -18,19 +19,18 @@ import jwt from "jsonwebtoken";
 */
 
 const generateAccessAndRefreshToken = async (userId) => {
-    try {
-        const user = await User.findById(userId);
-        const accessToken = user.generateAccessToken();
-        const refreshToken = user.generateRefreshToken();
-
-        user.refreshToken = refreshToken;
-        await user.save({ validateBeforeSave: false })
-
-        return {accessToken, refreshToken}
-    } 
-    catch (error) {
-        throw new ApiError(500, "Something went wrong while generating tokens");
-    }
+        try {
+            const user = await User.findById(userId);
+            const accessToken = user.generateAccessToken();
+            const refreshToken = user.generateRefreshToken();
+            user.refreshToken = refreshToken;
+            await user.save({ validateBeforeSave: false })
+            
+            
+            return {accessToken, refreshToken}
+        } catch (error) {
+            throw new ApiError(500, "Error while generating tokens")
+        }
 }
 
 const registerUser = asyncHandler( async (req, res) => {
@@ -89,8 +89,18 @@ const registerUser = asyncHandler( async (req, res) => {
         TIP : CONSOLE.LOG ALL THINGS AND SEE WHAT ALL YOU ARE GETTING IN IT. THAT IS THE MOST UNDERATTED WAY OF LEARNING THEN ONLY YOU WOULD KNOW WHAT ALL IS PRESENT IN EACH VARIBLE. for example console log req.boady, req.files, req.files?.avatar, req.files?.avatar[0], req.files?avatar[0]?.path and in the above codes also console log existed used, try to console all the varibles and see you will learn a lot.
     */
 
-    const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+    const avatarLocalPath = req.files?.avatar[0]?.path
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path
+
+
+    // let avatarLocalPath;
+    // if(req.files && Array.isArray(req.files.avatarLocalPath) && req.files.avatarLocalPath.length > 0){
+    //     avatarLocalPath = req.files.avatar[0].path
+    // }
+    let coverImageLocalPath;
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path
+    }
 
     if(!avatarLocalPath){
         throw new ApiError(400, "Avatar File is required")
@@ -172,18 +182,22 @@ const loginUser = asyncHandler( async (req, res) => {
 
 
     // we can get data by destructring the object for email or for username from req.body
-    const {email, username} = req.body;
+    const {email, username, password} = req.body;
 
-    // checking whether user has sent username or email or not, we can do only username or only email
-    if(!email || !username){
-        throw new ApiError(400, "Username or email is required!");
+    if(!email){
+        throw new ApiError(400, "Email is required");
     }
 
+    if(!password){
+        throw new ApiError(400, "Password is required");
+    }
+            
+    // checking whether user has sent username or email or not, we can do only username or only email
     // if both email or username is not empty then check whether this user is existed or not. for this we need to use the User model which is communicating with the database with the method User.findOne({}), you can pass any query to find in the database either existed or not.
 
     const user = await User.findOne({
-        $or: [{username}, {email}]
-    })
+        $or: [{email}, {username}]
+    });
 
 
     // check user exist or not, if not then throw new apierror.
@@ -203,17 +217,17 @@ const loginUser = asyncHandler( async (req, res) => {
 
     //now we have generated the roken with the method we have created above, don't forget to add await here because in generating tokens method you called the database and it will take time to generate for that reason you need to await this method and pass user id as argument from the instance which you accessed through User Model. With the help of destructuring we will hold both access token and refresh token.
 
-    const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user._id);
+    const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user?._id);
 
     // Now we did save it in the database but we do not have access to the token in user instance in this method. for that reason we need to create a loggedinUser which will hold all the things except password and refresh tokens.
 
-    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+    const loggedInUser = await User.findById(user?._id).select("-password -refreshToken");
 
     // now we need to send the cookie to user, for sending cookie we need to design some option before sending. it has some option like httpOnly and secure we need to make these two true, basically cookies can be modified in the frontend when you kept these two options for true this is not modifiable from the frontend this is only modifiable from server but we can see the cookies. 
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: false
     }
 
     // now send the response that everything went successfully and user can login. we sent the status code and sent accessToken and refreshToken in cookies but why do we need to send tokens again in json data, because if the user wants to save the tokens locally or user will be building the mobile applications in mobile applications the we do not have tokens access, it might be for that reason so it is a good practice to send these tokens also to user.
@@ -251,7 +265,7 @@ const logoutUser = asyncHandler ( async ( req, res ) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: false
     }
 
     return res
@@ -298,10 +312,9 @@ const refreshAccessToken = asyncHandler ( async (req, res) => {
         if(!user){
             throw new ApiError(401, "Invalid Refresh token");
         }
-    
         // now we have two decoded tokens one in incomingRefreshToken and other in user which is from the database, now we need to compare these two token are same or not, if not sent the api error.
     
-        if(incomingRefreshToken !== user){
+        if(incomingRefreshToken !== user.refreshToken){
             throw new ApiError(401, "Refresh token is expired or used");
         }
     
@@ -309,7 +322,7 @@ const refreshAccessToken = asyncHandler ( async (req, res) => {
     
         const options = {
             httpOnly: true,
-            secure: true
+            secure: false
         }
     
         const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id);
@@ -375,7 +388,7 @@ const updateAccountDetails = asyncHandler ( async (req, res) => {
     // here you can give options to your user what all he needs, to changer for this example we are giving options to change only fullName and email
     const {fullName, email} = req.body;
 
-    if(!fullName || !email){
+    if(!fullName && !email){
         throw new ApiError(400, "We are giving only two options to change either fullName and email both cannot be empty");
     }
     // now we need to get the user to update the details provided by the user for the we need to find the user by if. 
@@ -480,7 +493,10 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
 
 const getUserChannelProfile = asyncHandler( async (req, res) => {
     
-    const {username} = req.params
+
+    // Got Error while sending the username through params but it is working with body. 
+    // Check once and improve the code and optimise it.
+    const {username} = req?.body
 
     if(!username?.trim()){
         throw new ApiError(400, "Username is required");
