@@ -82,7 +82,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     // create video in database
     // store video url in database and toggle isPublished true
     const video = await Video.create({
-        videoFile: video.url,
+        videoFile: videoURL.url,
         thumbnail: thumbnail.url,
         title,
         description,

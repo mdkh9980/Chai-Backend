@@ -13,8 +13,8 @@ const createTweet = asyncHandler(async (req, res) => {
     }
 
     const tweet = await Tweet.create({
-        text,
-        user: userId
+        content: text,
+        owner: userId
     })
 
     if(!tweet){
@@ -45,7 +45,7 @@ const getUserTweets = asyncHandler(async (req, res) => {
     return res
     .status(200)
     .json(
-        new ApiResponse(200, {tweets}, "All thw tweets sent successfully")
+        new ApiResponse(200, {tweets}, "All tweets sent successfully")
     )
 
 })
@@ -62,7 +62,7 @@ const updateTweet = asyncHandler(async (req, res) => {
         tweetId,
         {
             $set: {
-                text: text
+                content: text
             }
         },
         {
