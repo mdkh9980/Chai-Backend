@@ -1,4 +1,4 @@
-import mongoose from "mongoose"
+import mongoose, { isValidObjectId } from "mongoose"
 import {Comment} from "../models/comment.model.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
@@ -20,44 +20,112 @@ const getVideoComments = asyncHandler(async (req, res) => {
     const response = new ApiResponse(comments, hasNextPage, hasPrevPage, nextPage, prevPage
         , totalPages)
     res.status(200).json(response)
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, {comments, hasNextPage, hasPrevPage, nextPage, prevPage, totalPages}, "Returning comments successfully")
+    )
 
 })
 
 const addComment = asyncHandler(async (req, res) => {
     // TODO: add a comment to a video
-        const {videoId} = req.params
-        const {body} = req
-        const comment = await Comment.create({videoId, body})
-        res.status(201).json(comment)
+    const {videoId} = req.params;
+    const {content} = req.body;
+    const {user} = req.user;
+
+    if(!videoId || !content || !user){
+        throw new ApiError(400, "Unauthorised User or Empty Comment Content");
+    }
+
+    const comment = await Comment.create({
+        content: content,
+        video: videoId,
+        owner: user._id
+    })
+
+    if(!comment){
+        throw new ApiError(400, "Error while creating the Comment")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, {comment}, "Comment Created Successfully")
+    )
 })
 
 const updateComment = asyncHandler(async (req, res) => {
     // TODO: update a comment
-    const {id} = req.params
-    const {body} = req
-    const comment = await Comment.findByIdAndUpdate(id, body, {new: true})
-    if (!comment) {
-        throw new ApiError(404, "Comment not found")
+    const {videoId} = req.params
+    const {content} = req.body
+    const {user} = req.user
+
+    if(!videoId || !content || !user){
+        throw new ApiError(400, "Unauthorised User or Empty Comment Content");
     }
-    res.status(200).json(comment)
+
+    const comment = await Comment.findOneAndUpdate(
+        user._id,
+        {
+            $set: {content: content}
+        },
+        {
+            new: true
+        }
+    )
+
+    if(!comment){
+        throw new ApiError(400, "Error while updating Comment")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, {comment}, "Comment Updated Successfully")
+    )
+
 })
 
 const deleteComment = asyncHandler(async (req, res) => {
     // TODO: delete a comment
-    const {id} = req.params
-    const comment = await Comment.findByIdAndDelete(id)
-    if (!comment) {
-        throw new ApiError(404, "Comment not found")
+    const {videoId} = req.params
+    const {user} = req.user
+    const {commentId} = req.params
+
+    if(!isValidObjectId(videoId)){
+        throw new ApiError(400, "Unidentified Video Id")
     }
-    res.status(200).json(comment)
+    if(!isValidObjectId(commentId)){
+        throw new ApiError(400, "Unidentified Comment Id")
+    
+    }
+    if(!user){
+        throw new ApiError(400, "Unauthorised User")
+    }
+
+    await Comment.findByIdAndDelete(
+        commentId,
+        {
+            $unset: {
+                content: undefined
+            }
+        }
+    )
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, {}, "Comment Deleted Successfully")
+    )
 })
 
 export {
     getVideoComments, 
     addComment, 
     updateComment,
-     deleteComment
-    }
+    deleteComment
+}
 
 
     const getComment = asyncHandler(async (req, res) => {
